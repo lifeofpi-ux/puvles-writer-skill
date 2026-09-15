@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" font-family="Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif">
+  <rect width="1200" height="600" fill="#fff"/>
+  <text x="600" y="44" text-anchor="middle" font-size="26" font-weight="700" fill="#1e1b4b">배포 서비스 선택 의사결정 흐름도</text>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker></defs>
+  <g font-size="15" fill="#0f172a" text-anchor="middle">
+    <rect x="450" y="70" width="300" height="56" rx="28" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+    <text x="600" y="104" font-weight="700">시작: 만든 앱을 배포하려면?</text>
+    <rect x="450" y="165" width="300" height="60" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="600" y="190" font-weight="700">Q1. 로그인이나 학생별 데이터</text><text x="600" y="212">저장이 필요한가?</text>
+    <rect x="450" y="300" width="300" height="60" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="600" y="325" font-weight="700">Q2. 학교 전체가 쓰거나</text><text x="600" y="347">교내 구성원만 열어야 하는가?</text>
+    <rect x="450" y="435" width="300" height="60" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="600" y="460" font-weight="700">Q3. Next.js나 v0로</text><text x="600" y="482">만든 앱인가?</text>
+  </g>
+  <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)">
+    <line x1="600" y1="126" x2="600" y2="163"/><line x1="600" y1="225" x2="600" y2="298"/><line x1="600" y1="360" x2="600" y2="433"/>
+    <line x1="750" y1="195" x2="880" y2="195"/><line x1="750" y1="330" x2="880" y2="330"/><line x1="750" y1="465" x2="880" y2="465"/>
+    <path d="M450 465 H 330 V 520"/>
+  </g>
+  <g font-size="13" fill="#475569"><text x="760" y="185">예</text><text x="760" y="320">예</text><text x="760" y="455">예</text><text x="605" y="262">아니오</text><text x="605" y="397">아니오</text><text x="400" y="455">아니오</text></g>
+  <g font-size="16" font-weight="700" text-anchor="middle">
+    <rect x="885" y="165" width="260" height="60" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/><text x="1015" y="190" fill="#92400e">Firebase</text><text x="1015" y="212" font-size="12" font-weight="400" fill="#b45309">Auth + Firestore 한 프로젝트</text>
+    <rect x="885" y="300" width="260" height="60" rx="14" fill="#fff7ed" stroke="#f97316" stroke-width="2"/><text x="1015" y="325" fill="#9a3412">Cloudflare</text><text x="1015" y="347" font-size="12" font-weight="400" fill="#c2410c">대역폭 무제한 · Access 제한</text>
+    <rect x="885" y="435" width="260" height="60" rx="14" fill="#f8fafc" stroke="#0f172a" stroke-width="2"/><text x="1015" y="460" fill="#0f172a">Vercel</text><text x="1015" y="482" font-size="12" font-weight="400" fill="#334155">Next.js 서버 기능 그대로</text>
+    <rect x="200" y="520" width="260" height="60" rx="14" fill="#f0fdfa" stroke="#14b8a6" stroke-width="2"/><text x="330" y="545" fill="#115e59">Netlify</text><text x="330" y="567" font-size="12" font-weight="400" fill="#0f766e">드래그 앤 드롭으로 오늘 배포</text>
+  </g>
+  <text x="810" y="575" text-anchor="middle" font-size="13" fill="#64748b">저장소는 하나이므로 나중에 옮기는 데 10분이면 충분합니다.</text>
+</svg>

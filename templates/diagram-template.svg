@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" width="1200" height="520" font-family="Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif">
+  <!-- 퍼블리스 본문 폭에 맞춘 기본 도식 틀: 흰 배경, 제목, 3열 카드, 아래 요약 띠. 열 수·높이는 내용에 맞게 조정 -->
+  <rect width="1200" height="520" fill="#ffffff"/>
+  <text x="600" y="46" text-anchor="middle" font-size="26" font-weight="700" fill="#1e1b4b">도식 제목</text>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker></defs>
+  <!-- 카드 1 (보라) -->
+  <rect x="40" y="80" width="350" height="300" rx="18" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <text x="215" y="120" text-anchor="middle" font-size="20" font-weight="700" fill="#3730a3">카드 제목 1</text>
+  <text x="70" y="165" font-size="15" fill="#312e81">• 항목</text>
+  <text x="70" y="192" font-size="15" fill="#312e81">• 항목</text>
+  <!-- 카드 2 (초록) -->
+  <rect x="425" y="80" width="350" height="300" rx="18" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="600" y="120" text-anchor="middle" font-size="20" font-weight="700" fill="#065f46">카드 제목 2</text>
+  <text x="455" y="165" font-size="15" fill="#064e3b">• 항목</text>
+  <!-- 카드 3 (분홍) -->
+  <rect x="810" y="80" width="350" height="300" rx="18" fill="#fdf2f8" stroke="#ec4899" stroke-width="2"/>
+  <text x="985" y="120" text-anchor="middle" font-size="20" font-weight="700" fill="#9d174d">카드 제목 3</text>
+  <text x="840" y="165" font-size="15" fill="#831843">• 항목</text>
+  <!-- 연결선 (marker-end로 화살표) -->
+  <g stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"><path d="M215 380 V420"/><path d="M600 380 V420"/><path d="M985 380 V420"/></g>
+  <!-- 아래 요약 띠 -->
+  <rect x="40" y="425" width="1120" height="70" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="600" y="467" text-anchor="middle" font-size="15" fill="#0f172a">한 줄 요약 또는 각 열의 결론</text>
+</svg>

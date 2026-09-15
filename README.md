@@ -68,6 +68,9 @@ node $S publish ./my-book --complete              # 프로젝트 생성 → 파�
 | `create-project "<title>" [--description ..] [--book-size ..] [--sample] [--no-open]` | 프로젝트 생성 |
 | `open-project <id>` | 편집기 열기 후 도구 등록 대기 |
 | `context`, `toc` | 프로젝트 정보, 목차 |
+| `images <chapterId>` | 챕터의 이미지 블록 목록 (순번, 캡션, 이미지 유무) |
+| `set-image <chapterId> --image <n> (--file x.svg \| --url ..)` | 플레이스홀더에 이미지 삽입 (파일은 편집기와 같은 저장소에 업로드) |
+| `generate-image <chapterId> --image <n> [--prompt ..]` | 편집기의 AI 이미지 생성과 동일 (편집기에 저장된 Google API 키 필요) |
 | `create-part`, `create-chapter`, `write-chapter`, `read-chapter`, `navigate` | 집필 |
 | `save-chapter [--complete]` | 편집기 저장 버튼과 동일한 확정 저장 |
 | `complete-all` | 모든 챕터 완료 처리 |

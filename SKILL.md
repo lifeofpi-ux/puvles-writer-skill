@@ -17,7 +17,8 @@ Tools by page:
 - dashboard (`/dashboard`): `list_projects`, `create_project`, `open_project`
 - editor (`/project/:id`): `get_project_context`, `get_book_toc`,
   `create_part`, `create_chapter`, `get_chapter_content`,
-  `write_chapter_markdown`, `navigate_to_chapter`, `update_toc_structure`,
+  `write_chapter_markdown`, `list_chapter_images`, `set_chapter_image`,
+  `generate_chapter_image`, `navigate_to_chapter`, `update_toc_structure`,
   `save_chapter`, `delete_chapter`, `delete_part`, `update_project_settings`
 
 Run every command as `node ~/.claude/skills/puvles-writer/scripts/puvles.mjs <cmd> ...`.
@@ -64,7 +65,9 @@ If the user's message already names a mode ("바로 써줘", "로컬에 먼저 �
    copy, then `create-part "<title>" "<code>"` →
    `create-chapter <partId> "<title>" "<code>"` →
    `write-chapter <chapterId> file.md [--complete]`. Writing moves the editor
-   to the chapter, records the character count and plays the block animation;
+   to the chapter, records the character count and plays the block animation
+   (the view scrolls along with the blocks as they appear; a manual wheel or
+   touch scroll pauses the following for 2.5 s);
    no separate save is needed. Pause a few seconds between chapters when the
    user is watching or recording.
 4. Finish: `complete-all` (or `--complete` per chapter) marks chapters done so
@@ -81,6 +84,9 @@ If the user's message already names a mode ("바로 써줘", "로컬에 먼저 �
    Write one Markdown file per chapter under `chapters/` (frontmatter
    `question` and `summary` required; the manifest carries title and code).
    Name files `<part>-<chapter>.md` (e.g. `01-03.md`) so they sort.
+   A chapter may also list `images`: `[{ "index": 0, "file": "images/x.svg" }]`
+   (or `captionMatch` / `url`); `publish` puts them into the placeholders after
+   writing each body, so re-publishing never loses inserted images.
 2. `validate <dir>` until it reports `ok: true`.
 3. `publish <dir> --dry-run` shows the plan; then `publish <dir>` creates the
    project (unless `--project <id>` or `book.json.projectId` is set), sets the
@@ -96,6 +102,62 @@ Both modes end in the same state: a project with parts, chapters and bodies,
 statistics recorded, chapters marked complete when asked, editor left on the
 first chapter.
 
+## Images (after the text is in place)
+
+Every `[이미지 플레이스홀더: 캡션]` line becomes an empty image block. Fill
+them once the chapter is written:
+
+1. `images <chapterId>` lists the image blocks with `imageIndex` (0-based,
+   body order), `blockId`, `caption` and `hasImage`.
+2. `set-image <chapterId> --image <n> --file diagram.png` uploads a local
+   png/jpg/gif/webp/svg (≤10 MB) to the same storage the editor's upload
+   button uses and puts it in that block; `--url https://...` links a public
+   image instead. Pick the block with `--image <n>`, `--block <id>` or
+   `--caption-match "부분 문자열"`; `--at <index>` / `--after <blockId>`
+   create a new image block instead. `--caption "..."` replaces the caption.
+3. `generate-image <chapterId> --image <n> [--prompt "..."]` runs the
+   editor's own AI illustration (Google image model with the project's AI
+   image style prompt). It needs the Google API key the user saved in the
+   editor's "AI 설정"; if the tool reports a missing key, ask the user to save
+   it there, never ask for the key yourself. Without `--prompt` the caption
+   is the prompt. Generation takes 10–30 s per image.
+
+Both commands refresh the open chapter with the block animation and update
+the page estimate (an image counts 0.4 page). Images cannot be removed
+through WebMCP; the editor's ✕ button on the image does that.
+
+### Drawing diagrams as SVG (when the user wants figures made, not just placed)
+
+Sort the placeholders first. A caption that describes a real product screen
+(대시보드, 콘솔, 터미널, 화면 캡처 …) cannot be produced: leave that block
+empty and tell the user which ones need their screenshots. A caption that
+describes a **diagram, infographic, flow, comparison or before/after**
+(다이어그램, 인포그래픽, 흐름도, 비교, 구조, 계보 …) can be drawn as an SVG
+and inserted with `set-image --file`. Always ask, or act on an explicit
+request, before drawing: it changes the book's content.
+
+Rules that keep the SVG rendering cleanly in the editor and in exports:
+
+- Start from `templates/diagram-template.svg` (3-column card layout with
+  arrows) and see `templates/example-decision-tree.svg` for a finished
+  flowchart. Save as `<book>/images/<part>-<chapter>-<slug>.svg`.
+- `viewBox="0 0 1200 H"` with H 480–600, white `<rect>` background, the
+  Korean font stack from the template, no external fonts, images or CSS.
+- Text ≥ 13px, titles 20–26px, ≤ 3 lines per bullet block; break long
+  Korean phrases into separate `<text>` lines (SVG has no wrapping).
+- No brand logos or trademarks: name badges (rounded rect + text) in the
+  service's colour are enough. Dates next to any price or limit.
+- Keep it under ~10 KB and one idea per figure; a table with more than
+  four columns is better as a code block in the text.
+- After inserting, `screenshot` and Read it: check overlaps at the card
+  edges and footnotes, then fix the SVG and re-run `set-image` (same
+  block, new file replaces the old one).
+- Record each figure in `book.json` (`images: [{ index, file }]`) so
+  `publish` re-applies it, and keep the SVG source in the book folder.
+
+`generate-image` (AI illustration) is for pictures, not for diagrams with
+text: the model does not render Korean text reliably.
+
 ## Housekeeping tools (only when the user asks for exactly that)
 
 - `save-chapter [--complete]` commits what the user typed in the open chapter,
@@ -108,8 +170,8 @@ first chapter.
   the default box markers (`조금 더 쉽게`, `Basic Study`), whatever the labels
   display as.
 
-Still not available through WebMCP: deleting or editing single blocks, image
-uploads, member management, deleting projects. Those live in the UI; tell the
+Still not available through WebMCP: deleting or editing single text blocks,
+removing images, member management, deleting projects. Those live in the UI; tell the
 user instead of working around it.
 
 ## Markdown dialect the editor's parser accepts

@@ -20,6 +20,13 @@
 //   puvles.mjs read-chapter <chapterId>             get_chapter_content
 //   puvles.mjs navigate <chapterId>                 navigate_to_chapter
 //   puvles.mjs save-chapter [--complete]            save_chapter (same as the editor's save button)
+//   puvles.mjs images <chapterId>                   list_chapter_images (image blocks: id, imageIndex, caption, hasImage)
+//   puvles.mjs set-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>)
+//                                   (--url <https://...> | --file <path.png>) [--caption "..."] [--no-focus]
+//                                                   set_chapter_image: fill a placeholder (or insert a new image block) with a URL or an uploaded file
+//   puvles.mjs generate-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>)
+//                                   [--prompt "..."] [--caption "..."] [--no-focus]
+//                                                   generate_chapter_image: the editor's AI illustration (needs the Google API key saved in the editor's AI 설정)
 //   puvles.mjs delete-chapter <chapterId>           delete_chapter (irreversible; only on explicit user request)
 //   puvles.mjs delete-part <partId>                 delete_part (irreversible; deletes its chapters too)
 //   puvles.mjs settings '<json>'                    update_project_settings, e.g. '{"bookSize":"A5","blockLabels":{"box_green":"쉽게 풀기"}}'
@@ -38,7 +45,8 @@
 //   puvles.mjs validate <dir>                       check book.json and chapter files
 //   puvles.mjs publish <dir> [--project <id>] [--complete] [--dry-run]
 //                                                   create the project (unless --project or book.json.projectId),
-//                                                   then parts, chapters and bodies in order; writes projectId back
+//                                                   then parts, chapters and bodies in order; writes projectId back.
+//                                                   chapter.images [{index|captionMatch, file|url, caption?}] are re-applied after each body
 // env: PUVLES_TARGET (tab id; auto-detected otherwise), CDP_PORT (default 9222),
 //      PUVLES_HOME (site origin, default https://puvles.lopapps.com/ — use http://localhost:5174/ for a dev server)
 
@@ -232,6 +240,28 @@ function validateBook(dir) {
   return { ok: problems.length === 0, problems, parts: (book.parts || []).length, chapters: (book.parts || []).reduce((n, p) => n + (p.chapters || []).length, 0) };
 }
 
+// ── image helpers (set-image / generate-image) ──
+const IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
+function fileToDataUrl(p) {
+  const ext = String(p).split('.').pop().toLowerCase();
+  const mime = IMAGE_MIME[ext];
+  if (!mime) throw new Error(`unsupported image type .${ext} (png, jpg, gif, webp, svg)`);
+  const buf = fs.readFileSync(p);
+  if (buf.length > 10 * 1024 * 1024) throw new Error('image larger than 10MB: resize or compress it first');
+  return `data:${mime};base64,${buf.toString('base64')}`;
+}
+// --block / --image / --caption-match pick an existing image block; --at / --after insert a new one
+function imageTarget() {
+  const t = {};
+  if (flags.block) t.blockId = flags.block;
+  if (flags.image !== undefined) t.imageIndex = Number(flags.image);
+  if (flags['caption-match']) t.captionMatch = flags['caption-match'];
+  if (flags.at !== undefined) t.insertAtIndex = Number(flags.at);
+  if (flags.after) t.insertAfterBlockId = flags.after;
+  if (Object.keys(t).length === 0) throw new Error('pick a target: --block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>  (see: images <chapterId>)');
+  return t;
+}
+
 const commands = {
   async tab() { return { targetId: await getTarget() }; },
   async tools() {
@@ -342,7 +372,19 @@ const commands = {
         if (!firstChapterId) firstChapterId = chapterId;
         const { md } = prepareMarkdown(fs.readFileSync(`${dir}/${ch.file}`, 'utf8'), { joinParagraphs: !flags['split-paragraphs'] });
         const w = await callTool('write_chapter_markdown', { chapterId, markdown: md, markAsCompleted: !!(flags.complete || ch.complete), focus: true });
-        partReport.chapters.push({ code: ch.code, title: ch.title, chapterId, blocks: w.blocksCreated, charCount: w.charCount, pages: w.estimatedPages, completed: !!(flags.complete || ch.complete) });
+        // chapter.images: [{ index | captionMatch, file | url, caption? }] — re-applied after every write, since
+        // write_chapter_markdown recreates all blocks and would otherwise leave the placeholders empty
+        const imageReport = [];
+        for (const im of ch.images || []) {
+          const target = typeof im.index === 'number' ? { imageIndex: im.index } : im.captionMatch ? { captionMatch: im.captionMatch } : null;
+          if (!target) throw new Error(`${ch.file}: each image needs "index" or "captionMatch"`);
+          const source = im.file ? { dataUrl: fileToDataUrl(`${dir}/${im.file}`) } : im.url ? { url: im.url } : null;
+          if (!source) throw new Error(`${ch.file}: each image needs "file" or "url"`);
+          const r = await callTool('set_chapter_image', { chapterId, ...target, ...source, caption: im.caption || undefined, focus: false });
+          imageReport.push({ index: r.imageIndex, blockId: r.blockId, url: r.url });
+          await sleep(400);
+        }
+        partReport.chapters.push({ code: ch.code, title: ch.title, chapterId, blocks: w.blocksCreated, charCount: w.charCount, pages: imageReport.length ? undefined : w.estimatedPages, completed: !!(flags.complete || ch.complete), images: imageReport.length ? imageReport : undefined });
         await sleep(Number(flags.pause || 2500));
       }
       report.parts.push(partReport);
@@ -350,6 +392,16 @@ const commands = {
     if (firstChapterId) await callTool('navigate_to_chapter', { chapterId: firstChapterId });
     report.context = await callTool('get_project_context');
     return report;
+  },
+  async images([chapterId]) { if (!chapterId) throw new Error('usage: images <chapterId>'); return callTool('list_chapter_images', { chapterId }); },
+  async 'set-image'([chapterId]) {
+    if (!chapterId || (!flags.url && !flags.file)) throw new Error('usage: set-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>) (--url <url> | --file <path>) [--caption "..."] [--no-focus]');
+    const source = flags.file ? { dataUrl: fileToDataUrl(flags.file) } : { url: flags.url };
+    return callTool('set_chapter_image', { chapterId, ...imageTarget(), ...source, caption: flags.caption || undefined, focus: !flags['no-focus'] });
+  },
+  async 'generate-image'([chapterId]) {
+    if (!chapterId) throw new Error('usage: generate-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>) [--prompt "..."] [--caption "..."] [--no-focus]');
+    return callTool('generate_chapter_image', { chapterId, ...imageTarget(), prompt: flags.prompt || undefined, caption: flags.caption || undefined, focus: !flags['no-focus'] });
   },
   async screenshot([out = 'puvles.png']) {
     const t = await getTarget();
