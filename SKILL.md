@@ -18,7 +18,7 @@ Tools by page:
 - editor (`/project/:id`): `get_project_context`, `get_book_toc`,
   `create_part`, `create_chapter`, `get_chapter_content`,
   `write_chapter_markdown`, `list_chapter_images`, `set_chapter_image`,
-  `generate_chapter_image`, `navigate_to_chapter`, `update_toc_structure`,
+  `generate_chapter_image`, `remove_chapter_image`, `navigate_to_chapter`, `update_toc_structure`,
   `save_chapter`, `delete_chapter`, `delete_part`, `update_project_settings`
 
 Run every command as `node ~/.claude/skills/puvles-writer/scripts/puvles.mjs <cmd> ...`.
@@ -123,8 +123,13 @@ them once the chapter is written:
    is the prompt. Generation takes 10–30 s per image.
 
 Both commands refresh the open chapter with the block animation and update
-the page estimate (an image counts 0.4 page). Images cannot be removed
-through WebMCP; the editor's ✕ button on the image does that.
+the page estimate (an image counts 0.4 page).
+
+`remove-image <chapterId> --image <n>` clears the image and leaves the caption
+placeholder (like the editor's ✕ button); `--delete-block` removes the block
+itself and closes the gap. The uploaded file is deleted from storage too when
+it lives in the editor's bucket and no other block references it (`--keep-file`
+to skip). Irreversible: only on an explicit request, never to tidy up.
 
 ### Drawing diagrams as SVG (when the user wants figures made, not just placed)
 
@@ -171,7 +176,7 @@ text: the model does not render Korean text reliably.
   display as.
 
 Still not available through WebMCP: deleting or editing single text blocks,
-removing images, member management, deleting projects. Those live in the UI; tell the
+member management, deleting projects. Those live in the UI; tell the
 user instead of working around it.
 
 ## Markdown dialect the editor's parser accepts

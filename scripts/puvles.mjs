@@ -27,6 +27,8 @@
 //   puvles.mjs generate-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>)
 //                                   [--prompt "..."] [--caption "..."] [--no-focus]
 //                                                   generate_chapter_image: the editor's AI illustration (needs the Google API key saved in the editor's AI 설정)
+//   puvles.mjs remove-image <chapterId> (--block <id> | --image <n> | --caption-match "...") [--delete-block] [--keep-file] [--no-focus]
+//                                                   remove_chapter_image: clear the image (keeps the caption placeholder) or delete the block; irreversible
 //   puvles.mjs delete-chapter <chapterId>           delete_chapter (irreversible; only on explicit user request)
 //   puvles.mjs delete-part <partId>                 delete_part (irreversible; deletes its chapters too)
 //   puvles.mjs settings '<json>'                    update_project_settings, e.g. '{"bookSize":"A5","blockLabels":{"box_green":"쉽게 풀기"}}'
@@ -402,6 +404,12 @@ const commands = {
   async 'generate-image'([chapterId]) {
     if (!chapterId) throw new Error('usage: generate-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>) [--prompt "..."] [--caption "..."] [--no-focus]');
     return callTool('generate_chapter_image', { chapterId, ...imageTarget(), prompt: flags.prompt || undefined, caption: flags.caption || undefined, focus: !flags['no-focus'] });
+  },
+  async 'remove-image'([chapterId]) {
+    if (!chapterId) throw new Error('usage: remove-image <chapterId> (--block <id> | --image <n> | --caption-match "...") [--delete-block] [--keep-file] [--no-focus]');
+    const t = imageTarget();
+    if (t.insertAtIndex !== undefined || t.insertAfterBlockId) throw new Error('remove-image takes --block, --image or --caption-match only');
+    return callTool('remove_chapter_image', { chapterId, ...t, deleteBlock: !!flags['delete-block'], deleteFile: !flags['keep-file'], focus: !flags['no-focus'] });
   },
   async screenshot([out = 'puvles.png']) {
     const t = await getTarget();
