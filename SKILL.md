@@ -22,7 +22,9 @@ Tools by page:
   `save_chapter`, `delete_chapter`, `delete_part`, `update_project_settings`
 
 Run every command as `node ~/.claude/skills/puvles-writer/scripts/puvles.mjs <cmd> ...`.
-The header of that file lists all commands.
+The header of that file lists all commands. A second script,
+`scripts/capture.mjs`, screenshots real product screens for the book's figures
+through the same Chrome; see "Capturing product screens with Playwright".
 
 ## Step 0: choose the mode (always ask unless the user already said)
 
@@ -105,7 +107,12 @@ first chapter.
 ## Images (after the text is in place)
 
 Every `[이미지 플레이스홀더: 캡션]` line becomes an empty image block. Fill
-them once the chapter is written:
+them once the chapter is written. Sort the captions first: a **diagram or
+infographic** you draw as SVG, a **real product screen** you capture with
+Playwright, a **picture** you generate, and anything that needs the user's own
+data or hardware you leave empty and name for them.
+
+Commands:
 
 1. `images <chapterId>` lists the image blocks with `imageIndex` (0-based,
    body order), `blockId`, `caption` and `hasImage`.
@@ -162,6 +169,85 @@ Rules that keep the SVG rendering cleanly in the editor and in exports:
 
 `generate-image` (AI illustration) is for pictures, not for diagrams with
 text: the model does not render Korean text reliably.
+
+### Capturing product screens with Playwright (when the placeholder needs a real UI)
+
+A caption that describes a real screen cannot be drawn, but it can often be
+**photographed**: `scripts/capture.mjs` attaches to the same logged-in Chrome
+the Puvles tools already use and screenshots any page inside the user's real
+session, so Google, Notion or an admin console need no second login and no
+browser download. Install the dependency once:
+
+```
+cd ~/.claude/skills/puvles-writer && npm i playwright-core
+```
+
+```
+capture.mjs tabs                            what is open in that Chrome right now
+capture.mjs shot <url> <out.png> [options]  open a tab, capture it, close it
+capture.mjs run <recipe.mjs> [args...]      multi-step flow, then capture
+```
+
+`shot` options: `--wait <ms>`, `--selector <css>` (one element),
+`--clip <x,y,w,h>` (a CSS-pixel rectangle, the tightest book figures),
+`--full`, `--viewport <WxH>` (default 1440x900), `--dpr <n>` (default 2),
+`--click <css>` and `--press <key>` (repeatable, applied before the shot),
+`--hide <css>`, `--reuse` (shoot the open tab instead of a new one),
+`--keep-open`, `--timeout <ms>`.
+
+A recipe is an ES module exporting one async function, for the flows a single
+URL cannot reach (open a menu, paste data, run something, then shoot):
+
+```
+export default async ({ page, context, browser, shot, args, argv }) => {
+  await page.goto('https://docs.google.com/spreadsheets/d/<id>/edit');
+  await page.getByRole('menuitem', { name: '확장 프로그램' }).click();
+  await shot(page, 'shots/menu.png', { clip: '0,0,1000,560', dpr: 2 });
+};
+```
+
+Then place it like any other figure and record it in `book.json` so a
+re-publish keeps it:
+
+```
+puvles.mjs set-image <chapterId> --image <n> --file shots/menu.png
+```
+
+What actually goes wrong, and the fix:
+
+- **Korean text never arrives through `keyboard.type()`.** Hangul needs an IME,
+  so the syllables are dropped or truncated ("보호자 이메일" lands as "이메일").
+  Put the text on the clipboard and paste it instead: `grantPermissions`
+  `['clipboard-read','clipboard-write']` for the origin, `navigator.clipboard.writeText(tsv)`
+  in the page, then `Meta+V`. Tab-separated rows paste straight into a
+  spreadsheet grid, which is also far faster than typing cell by cell.
+- **Popups sit on top of the figure.** A paste-options bubble, a tooltip or an
+  autocomplete needs `--press Escape`; a cookie or consent bar needs
+  `--click` on its accept button or `--hide` on its container.
+- **Web apps need longer than a page load.** Google's editors keep painting for
+  ten seconds or more after `domcontentloaded`; give them `--wait 9000` and
+  raise it if the shot comes back half-drawn.
+- **A click can open a new tab.** Wait for it rather than guessing:
+  `const [tab] = await Promise.all([context.waitForEvent('page'), link.click()])`,
+  then `await shot(tab, ...)`.
+- **Always Read the PNG back** before inserting it. Half-loaded panes, stray
+  characters left in a code editor and menus that closed early all look fine
+  in the log and wrong in the book.
+
+Rules that matter more than the picture:
+
+- **Never capture real personal data.** Use the book's own fictional names and
+  example.com addresses. A real inbox, a real class roster or a real
+  student's name in a figure ships that person's data with the book. If a
+  screen cannot be staged with fake data, leave the placeholder for the user.
+- **Staging a figure may change the user's account.** Creating documents is
+  reversible and fine; granting OAuth scopes, sending mail, deleting
+  anything, installing triggers and deploying a web app are not ordinary
+  screenshot steps. Say what the capture will create before a long run, and
+  ask before anything outward-facing. Never send mail to a third party to
+  stage a figure; address it to the user's own account.
+- **Keep the staged artifacts together** so the user can find and remove them
+  later, and tell them what was created and where.
 
 ## Housekeeping tools (only when the user asks for exactly that)
 
