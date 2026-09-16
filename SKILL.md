@@ -221,6 +221,25 @@ What actually goes wrong, and the fix:
   `['clipboard-read','clipboard-write']` for the origin, `navigator.clipboard.writeText(tsv)`
   in the page, then `Meta+V`. Tab-separated rows paste straight into a
   spreadsheet grid, which is also far faster than typing cell by cell.
+- **Set a code editor's text through its own model, not the keyboard.** Even
+  clipboard paste leaves IME residue in a Monaco editor: stray syllables land
+  at the end of the buffer and the saved script dies with a `ReferenceError`
+  on a line past where the code ends. The Apps Script editor exposes `monaco`,
+  so `monaco.editor.getModels()[0].setValue(src)` inside `page.evaluate()`
+  writes the file with no key events at all. Read it back the same way and
+  compare with the source before saving; `innerText` only shows the lines
+  Monaco has rendered, so it cannot verify the whole file. `keyboard.insertText`
+  is not a substitute: the editor auto-indents every inserted line and the
+  result is mangled.
+- **Keys sent to a grid become Hangul too.** An `Escape` or a stray press
+  against a spreadsheet can commit a jamo into the selected cell. Take the
+  shot right after a reload and send no keys at all, rather than pressing
+  Escape to tidy the view.
+- **Check that the run actually succeeded, not just that it started.** A web
+  IDE reports "started" and then fails server-side. The Apps Script
+  executions page (`/home/projects/<id>/executions`) lists each run with its
+  status; expand a failed row for the error. An editor wedged on "saving"
+  needs a reload, not another click.
 - **Popups sit on top of the figure.** A paste-options bubble, a tooltip or an
   autocomplete needs `--press Escape`; a cookie or consent bar needs
   `--click` on its accept button or `--hide` on its container.
