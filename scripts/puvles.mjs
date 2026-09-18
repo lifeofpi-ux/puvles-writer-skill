@@ -129,7 +129,7 @@ export function prepareMarkdown(src, { joinParagraphs = true } = {}) {
   if (!joinParagraphs) return { md, meta };
   // inside each run of plain-text lines, replace paragraph breaks with <br/><br/>
   const out = []; let buf = []; let inCode = false;
-  const structural = (l) => /^(#{1,4} |> \*\*|\[이미지)/.test(l);
+  const structural = (l) => /^(#{1,4} |> \*\*|\[이미지|\|)/.test(l);
   const flush = () => { if (buf.length) { const paras = buf.join('\n').split(/\n{2,}/).map(p => p.replace(/\n/g, ' ').trim()).filter(Boolean); out.push(paras.join('<br/><br/>')); buf = []; } };
   for (const line of md.split('\n')) {
     if (line.trim().startsWith('```')) { flush(); inCode = !inCode; out.push(line); continue; }

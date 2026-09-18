@@ -378,6 +378,8 @@ summary: "챕터 요약 (grey box under it)"
 
 ```code```               → code block
 [이미지 플레이스홀더: 캡션] → empty image block with caption
+| 항목 | 값 |            → table block (needs the | --- | separator row)
+| --- | --- |
 ```
 
 Parser quirks to respect:
@@ -386,7 +388,8 @@ Parser quirks to respect:
   Pass `--split-paragraphs` to skip that when a section is one paragraph.
 - A leading `# ` line is ignored; do not open the body with an H2 repeating
   the chapter title, the editor prints the title itself.
-- Tables are not parsed; use a code block or ask the user.
+- Tables: `| a | b |` rows with a `| --- | --- |` separator line become a table
+  block (plain-text cells, equal column widths; no merged cells or bold).
 - Lists (`- `, `1. `) are stored as plain text lines; prefer prose.
 
 ## Writing guidance for handbooks
