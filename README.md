@@ -72,6 +72,8 @@ node $S publish ./my-book --complete              # 프로젝트 생성 → 파�
 | `set-image <chapterId> --image <n> (--file x.svg \| --url ..)` | 플레이스홀더에 이미지 삽입 (파일은 편집기와 같은 저장소에 업로드) |
 | `generate-image <chapterId> --image <n> [--prompt ..]` | 편집기의 AI 이미지 생성과 동일 (편집기에 저장된 Google API 키 필요) |
 | `remove-image <chapterId> --image <n> [--delete-block] [--keep-file]` | 이미지 비우기(캡션 유지) 또는 블록 삭제. 저장소 파일도 함께 삭제. 되돌릴 수 없음 |
+| `image-prompt [--set ".."]` | 프로젝트의 AI 이미지 생성 지침 조회·설정 |
+| `generate-local <chapterId> (--image <n> \| --all-empty) [--prompt ..] --book <dir> [--dry-run]` | 편집기와 같은 프롬프트로 로컬에서 생성 → 파일 저장 → 본문 삽입 → book.json 기록. 키는 GEMINI_API_KEY, `--key`, `--key-from-browser` |
 | `create-part`, `create-chapter`, `write-chapter`, `read-chapter`, `navigate` | 집필 |
 | `save-chapter [--complete]` | 편집기 저장 버튼과 동일한 확정 저장 |
 | `complete-all` | 모든 챕터 완료 처리 |

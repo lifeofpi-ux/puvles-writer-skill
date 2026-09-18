@@ -22,13 +22,23 @@
 //   puvles.mjs save-chapter [--complete]            save_chapter (same as the editor's save button)
 //   puvles.mjs images <chapterId>                   list_chapter_images (image blocks: id, imageIndex, caption, hasImage)
 //   puvles.mjs set-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>)
-//                                   (--url <https://...> | --file <path.png>) [--caption "..."] [--no-focus]
+//                                   (--url <https://...> | --file <path.png>) [--caption "..."] [--book <dir>] [--no-focus]
 //                                                   set_chapter_image: fill a placeholder (or insert a new image block) with a URL or an uploaded file
 //   puvles.mjs generate-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>)
 //                                   [--prompt "..."] [--caption "..."] [--no-focus]
 //                                                   generate_chapter_image: the editor's AI illustration (needs the Google API key saved in the editor's AI 설정)
 //   puvles.mjs remove-image <chapterId> (--block <id> | --image <n> | --caption-match "...") [--delete-block] [--keep-file] [--no-focus]
 //                                                   remove_chapter_image: clear the image (keeps the caption placeholder) or delete the block; irreversible
+//   puvles.mjs image-prompt [--set "..."]           show / set the project's AI image style prompt (update_project_settings.aiImagePrompt)
+//   puvles.mjs generate-local <chapterId> (--image <n> | --all-empty) [--prompt "..."] [--style "..."] [--out <dir>] [--book <dir>]
+//                                   [--dry-run] [--agent] [--model gemini-3-pro-image-preview] [--size 1K|2K] [--key <k> | --key-from-browser]
+//                                                   without a key (or with --agent) it returns the assembled prompts + target file paths so the
+//                                                   agent draws each image itself as SVG and inserts it with set-image --file --book
+//                                                   generate the illustration locally with the editor's own prompt template (project style
+//                                                   prompt + caption), save it under --out (default <book>/images), insert it with
+//                                                   set_chapter_image and record it in book.json when --book is given.
+//                                                   key: GEMINI_API_KEY / GOOGLE_API_KEY env, --key, or --key-from-browser (the key saved
+//                                                   in the editor's AI 설정, read from the Puvles tab, never printed)
 //   puvles.mjs delete-chapter <chapterId>           delete_chapter (irreversible; only on explicit user request)
 //   puvles.mjs delete-part <partId>                 delete_part (irreversible; deletes its chapters too)
 //   puvles.mjs settings '<json>'                    update_project_settings, e.g. '{"bookSize":"A5","blockLabels":{"box_green":"쉽게 풀기"}}'
@@ -264,6 +274,59 @@ function imageTarget() {
   return t;
 }
 
+// ── AI illustration: the same prompt template as the editor (src/lib/megaPie.js generateMegaPieImage) ──
+const IMAGE_MODEL = 'gemini-3-pro-image-preview';
+export function buildImagePrompt(userPrompt, projectInstruction = '') {
+  return `${projectInstruction ? `*** PROJECT STYLE GUIDELINES ***\n${projectInstruction}\n********************************\n\n` : ''}USER REQUEST: ${userPrompt}\n\nREMINDER: PURE ILLUSTRATION, NO TEXT, NO BORDERS.`;
+}
+async function resolveGeminiKey() {
+  if (flags.key) return String(flags.key);
+  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  if (process.env.GOOGLE_API_KEY) return process.env.GOOGLE_API_KEY;
+  if (flags['key-from-browser']) {
+    const k = await evalInPage(`localStorage.getItem('google_api_key')`);
+    if (k) return k;
+    throw new Error('the editor has no Google API key saved (툴바 "AI 설정"); ask the user to save it there or set GEMINI_API_KEY');
+  }
+  throw new Error('no Gemini API key: set GEMINI_API_KEY (or GOOGLE_API_KEY), pass --key, or pass --key-from-browser to reuse the key saved in the editor\'s AI 설정');
+}
+async function generateImageLocally({ apiKey, prompt, model = IMAGE_MODEL, size = '1K' }) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { imageSize: size } } })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`Gemini ${r.status}: ${j.error?.message || JSON.stringify(j).slice(0, 200)}`);
+  const part = j.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+  if (!part) throw new Error('no image in the response: ' + JSON.stringify(j).slice(0, 300));
+  return { base64: part.inlineData.data, mimeType: part.inlineData.mimeType || 'image/png' };
+}
+// book.json chapter entry for a chapter id (matched through the live TOC by part title + chapter title/code)
+function findBookChapter(book, toc, chapterId) {
+  for (const p of toc.parts || []) {
+    const c = (p.chapters || []).find(x => x.id === chapterId);
+    if (!c) continue;
+    const bp = (book.parts || []).find(x => x.title === p.title) || null;
+    const bc = bp ? (bp.chapters || []).find(x => x.title === c.title || (x.code && x.code === c.chapter_code)) : null;
+    return { part: p, chapter: c, bookChapter: bc };
+  }
+  return { part: null, chapter: null, bookChapter: null };
+}
+
+// record {index, file} for a chapter in book.json (file path stored relative to the book dir)
+async function recordBookImage(bookDir, chapterId, imageIndex, file) {
+  const { book, manifestPath } = readBook(bookDir);
+  const toc = await callTool('get_book_toc');
+  const { bookChapter } = findBookChapter(book, toc, chapterId);
+  if (!bookChapter) return { recorded: false, reason: 'chapter not found in book.json (title/code mismatch)' };
+  const rel = file.startsWith(bookDir + '/') ? file.slice(bookDir.length + 1) : file;
+  bookChapter.images = (bookChapter.images || []).filter(im => im.index !== imageIndex);
+  bookChapter.images.push({ index: imageIndex, file: rel });
+  bookChapter.images.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  fs.writeFileSync(manifestPath, JSON.stringify(book, null, 2) + '\n');
+  return { recorded: true, file: rel };
+}
+
 const commands = {
   async tab() { return { targetId: await getTarget() }; },
   async tools() {
@@ -399,7 +462,9 @@ const commands = {
   async 'set-image'([chapterId]) {
     if (!chapterId || (!flags.url && !flags.file)) throw new Error('usage: set-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>) (--url <url> | --file <path>) [--caption "..."] [--no-focus]');
     const source = flags.file ? { dataUrl: fileToDataUrl(flags.file) } : { url: flags.url };
-    return callTool('set_chapter_image', { chapterId, ...imageTarget(), ...source, caption: flags.caption || undefined, focus: !flags['no-focus'] });
+    const r = await callTool('set_chapter_image', { chapterId, ...imageTarget(), ...source, caption: flags.caption || undefined, focus: !flags['no-focus'] });
+    if (flags.book && flags.file && typeof r.imageIndex === 'number') r.book = await recordBookImage(flags.book, chapterId, r.imageIndex, flags.file);
+    return r;
   },
   async 'generate-image'([chapterId]) {
     if (!chapterId) throw new Error('usage: generate-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>) [--prompt "..."] [--caption "..."] [--no-focus]');
@@ -410,6 +475,61 @@ const commands = {
     const t = imageTarget();
     if (t.insertAtIndex !== undefined || t.insertAfterBlockId) throw new Error('remove-image takes --block, --image or --caption-match only');
     return callTool('remove_chapter_image', { chapterId, ...t, deleteBlock: !!flags['delete-block'], deleteFile: !flags['keep-file'], focus: !flags['no-focus'] });
+  },
+  async 'image-prompt'() {
+    if (flags.set !== undefined) {
+      const r = await callTool('update_project_settings', { aiImagePrompt: String(flags.set) });
+      return { updated: true, aiImagePrompt: String(flags.set), result: r };
+    }
+    const ctx = await callTool('get_project_context');
+    return { projectId: ctx.projectId, aiImagePrompt: ctx.aiImagePrompt || '', hint: 'set with: image-prompt --set "스타일 지시문"' };
+  },
+  async 'generate-local'([chapterId]) {
+    if (!chapterId || (flags.image === undefined && !flags['all-empty'])) throw new Error('usage: generate-local <chapterId> (--image <n> | --all-empty) [--prompt "..."] [--style "..."] [--out <dir>] [--book <dir>] [--dry-run] [--model ..] [--size 1K|2K] [--key <k> | --key-from-browser]');
+    const ctx = await callTool('get_project_context');
+    const style = flags.style !== undefined ? String(flags.style) : (ctx.aiImagePrompt || '');
+    const list = await callTool('list_chapter_images', { chapterId });
+    let targets = flags['all-empty'] ? list.images.filter(i => !i.hasImage) : list.images.filter(i => i.imageIndex === Number(flags.image));
+    if (targets.length === 0) throw new Error(flags['all-empty'] ? 'no empty image blocks in this chapter' : `image block ${flags.image} not found (${list.images.length} image blocks)`);
+    if (flags.prompt && targets.length > 1) throw new Error('--prompt applies to one block; use --image <n> with it');
+    const toc = await callTool('get_book_toc');
+    let book = null, bookPath = null, bookChapter = null, chapter = null;
+    if (flags.book) { ({ book, manifestPath: bookPath } = readBook(flags.book)); ({ bookChapter, chapter } = findBookChapter(book, toc, chapterId)); }
+    else ({ chapter } = findBookChapter({ parts: [] }, toc, chapterId));
+    const outDir = flags.out || (flags.book ? `${flags.book}/images` : 'puvles-images');
+    const stem = chapter ? `${(toc.parts.find(p => (p.chapters || []).some(c => c.id === chapterId))?.chapter_code || 'part')}-${chapter.chapter_code || 'ch'}`.replace(/[^\w.-]+/g, '_') : chapterId.slice(0, 8);
+    const plan = targets.map(t => ({ imageIndex: t.imageIndex, blockId: t.blockId, caption: t.caption, prompt: buildImagePrompt(flags.prompt ? String(flags.prompt) : t.caption, style) }));
+    if (flags['dry-run']) return { dryRun: true, chapterId, model: flags.model || IMAGE_MODEL, size: flags.size || '1K', outDir, style, images: plan };
+    let apiKey = null;
+    try { apiKey = await resolveGeminiKey(); } catch (e) { if (flags.key || flags['key-from-browser']) throw e; }
+    fs.mkdirSync(outDir, { recursive: true });
+    if (!apiKey || flags.agent) {
+      // No Gemini key: hand the assembled prompts back so the agent draws each image itself (SVG), then inserts it.
+      const images = plan.map(t => ({ imageIndex: t.imageIndex, blockId: t.blockId, caption: t.caption, prompt: t.prompt, file: `${outDir}/${stem}-${t.imageIndex}.svg` }));
+      return {
+        mode: 'agent', chapterId, reason: flags.agent ? '--agent' : 'no Gemini API key (GEMINI_API_KEY / --key / --key-from-browser)',
+        style, outDir, images,
+        next: `Draw each image yourself as an SVG at "file", following "prompt" (see SKILL.md → Drawing diagrams as SVG), then insert it with:  set-image ${chapterId} --image <imageIndex> --file <file>${flags.book ? ` --book ${flags.book}` : ''}`
+      };
+    }
+    const report = [];
+    for (const t of plan) {
+      const { base64, mimeType } = await generateImageLocally({ apiKey, prompt: t.prompt, model: flags.model, size: flags.size });
+      const ext = ({ 'image/jpeg': 'jpg', 'image/webp': 'webp' })[mimeType] || 'png';
+      const file = `${outDir}/${stem}-${t.imageIndex}.${ext}`;
+      fs.writeFileSync(file, Buffer.from(base64, 'base64'));
+      const r = await callTool('set_chapter_image', { chapterId, blockId: t.blockId, dataUrl: `data:${mimeType};base64,${base64}`, focus: !flags['no-focus'] });
+      if (bookChapter) {
+        const rel = file.startsWith(flags.book + '/') ? file.slice(flags.book.length + 1) : file;
+        bookChapter.images = (bookChapter.images || []).filter(im => im.index !== t.imageIndex);
+        bookChapter.images.push({ index: t.imageIndex, file: rel });
+        bookChapter.images.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+        fs.writeFileSync(bookPath, JSON.stringify(book, null, 2) + '\n');
+      }
+      report.push({ imageIndex: t.imageIndex, blockId: r.blockId, file, bytes: Buffer.byteLength(base64, 'base64'), url: r.url, recordedInBook: !!bookChapter });
+      await sleep(500);
+    }
+    return { chapterId, model: flags.model || IMAGE_MODEL, generated: report.length, images: report, bookNote: flags.book && !bookChapter ? 'chapter not found in book.json (title/code mismatch); images not recorded' : undefined };
   },
   async screenshot([out = 'puvles.png']) {
     const t = await getTarget();
