@@ -124,10 +124,11 @@ summary: "챕터 요약 (그 아래 회색 박스)"
 > **Basic Study**: 개념 정리 → 분홍 박스
 
 ```code```                → 코드 블록
+| 항목 | 값 |             → 표 블록 (둘째 줄에 | --- | --- | 구분선 필요)
 [이미지 플레이스홀더: 캡션] → 캡션만 있는 이미지 블록
 ```
 
-구조 줄 사이의 문단은 하나의 텍스트 블록이 되므로 스크립트가 문단 사이를 `<br/><br/>`로 잇습니다. `--split-paragraphs`로 끌 수 있습니다. 표와 목록은 파서가 처리하지 않습니다.
+구조 줄 사이의 문단은 하나의 텍스트 블록이 되므로 스크립트가 문단 사이를 `<br/><br/>`로 잇습니다. `--split-paragraphs`로 끌 수 있습니다. 표는 `| a | b |` 행과 `| --- | --- |` 구분선으로 쓰면 표 블록이 됩니다(셀은 일반 텍스트, 병합 불가). 목록은 일반 텍스트 줄로 저장됩니다.
 
 ## 퍼블리스가 제공하는 WebMCP 도구
 
@@ -135,7 +136,11 @@ summary: "챕터 요약 (그 아래 회색 박스)"
 |---|---|
 | 모든 페이지 | get_auth_status, navigate_to |
 | 대시보드 | list_projects, create_project, open_project |
-| 편집기 | get_project_context, get_book_toc, create_part, create_chapter, get_chapter_content, write_chapter_markdown, navigate_to_chapter, update_toc_structure, save_chapter, delete_chapter, delete_part, update_project_settings |
+| 편집기 · 조회 | get_project_context, get_book_toc, get_chapter_content, list_chapter_images |
+| 편집기 · 구조 | create_part, create_chapter, update_part, update_chapter, update_toc_structure, delete_chapter, delete_part |
+| 편집기 · 본문 | write_chapter_markdown, insert_blocks, update_block, replace_blocks, delete_blocks, save_chapter |
+| 편집기 · 이미지 | set_chapter_image, generate_chapter_image, remove_chapter_image |
+| 편집기 · 설정/화면 | update_project_settings, navigate_to_chapter |
 
 ## 동작 원리
 
@@ -145,7 +150,7 @@ summary: "챕터 요약 (그 아래 회색 박스)"
 
 - 삭제 도구는 되돌릴 수 없습니다. 에이전트가 정리 목적으로 임의로 쓰지 않도록 SKILL.md에 명시되어 있습니다.
 - 원격 디버깅 포트가 열린 Chrome은 같은 컴퓨터의 다른 프로그램도 제어할 수 있습니다. 작업이 끝나면 닫는 것을 권합니다.
-- 프로젝트 삭제, 블록 단위 편집, 이미지 업로드, 멤버 관리는 도구로 제공되지 않습니다.
+- 프로젝트 삭제, 멤버 관리, 편집기의 AI 글쓰기 버튼, 표 세부 편집(셀 병합·셀 이미지·열 너비·표 캡션)은 도구로 제공되지 않습니다.
 
 ## 기존 책 부분 수정
 

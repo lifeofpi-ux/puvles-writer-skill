@@ -357,9 +357,10 @@ Rules that matter more than the picture:
   the default box markers (`조금 더 쉽게`, `Basic Study`), whatever the labels
   display as.
 
-Still not available through WebMCP: deleting or editing single text blocks,
-member management, deleting projects. Those live in the UI; tell the
-user instead of working around it.
+Still not available through WebMCP: member management, deleting projects,
+the editor's AI writing button, and table details (merged cells, images in
+cells, column widths, table captions). Those live in the UI; tell the user
+instead of working around it.
 
 ## Markdown dialect the editor's parser accepts
 

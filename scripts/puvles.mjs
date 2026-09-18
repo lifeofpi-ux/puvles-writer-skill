@@ -500,7 +500,7 @@ const commands = {
     const r = await callTool('get_chapter_content', { chapterId });
     const preview = (b) => {
       let c = b.content || '';
-      if (b.type === 'image' || b.type === 'table') { try { const o = JSON.parse(c); c = b.type === 'image' ? `${o.url ? '[img] ' : '[empty] '}${o.caption || ''}` : '[table]'; } catch { /* keep */ } }
+      if (b.type === 'image' || b.type === 'table') { try { const o = JSON.parse(c); c = b.type === 'image' ? `${o.url ? '[img] ' : '[empty] '}${o.caption || ''}` : `[table ${(o.rows||[]).length}×${(o.rows?.[0]||[]).length}] ${(o.rows?.[0]||[]).map(x=>typeof x==='string'?x:(x?.text||'')).join(' | ')}`; } catch { /* keep */ } }
       return c.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 70);
     };
     return { chapterId, title: r.title, blocks: (r.blocks || []).map((b, i) => ({ index: i, id: b.id, type: b.type, preview: preview(b) })) };
