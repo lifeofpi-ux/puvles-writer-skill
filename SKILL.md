@@ -138,7 +138,7 @@ itself and closes the gap. The uploaded file is deleted from storage too when
 it lives in the editor's bucket and no other block references it (`--keep-file`
 to skip). Irreversible: only on an explicit request, never to tidy up.
 
-### AI illustrations: how the prompt is built, and the two ways to generate
+### AI illustrations: read the project's prompt, then draw the image yourself
 
 The editor builds every illustration prompt the same way (src/lib/megaPie.js):
 
@@ -152,51 +152,37 @@ USER REQUEST: <the block's caption, or the prompt passed explicitly>
 REMINDER: PURE ILLUSTRATION, NO TEXT, NO BORDERS.
 ```
 
-Model `gemini-3-pro-image-preview`, 1K. So there are two prompt levels:
+So there are two prompt levels, and the skill uses both without calling any
+image API itself:
 
 - **Project style prompt** (one per book): `image-prompt` shows it,
   `image-prompt --set "깔끔한 펜화 일러스트, 흰 배경, 파스텔 포인트 컬러"` sets it
-  through `update_project_settings.aiImagePrompt`. Set it once before
-  generating anything, so all figures share a style. Describe medium, line
-  weight, palette, background and mood; say what to avoid.
+  through `update_project_settings.aiImagePrompt`. Set or confirm it with the
+  user once before drawing anything, so all figures share a style. Describe
+  medium, line weight, palette, background and mood; say what to avoid.
 - **Per-block prompt** = the placeholder caption. When you write
-  `[이미지 플레이스홀더: …]` for a figure that will be AI-generated, write the
-  caption as an illustration brief: subject, setting, composition, mood, in
-  one or two sentences, and no text or UI to render (the model does not draw
-  Korean text; the template already forbids text). Screenshot-style captions
+  `[이미지 플레이스홀더: …]` for a figure that will be drawn, write the caption
+  as an illustration brief: subject, setting, composition, mood, in one or
+  two sentences, and no text or UI to render. Screenshot-style captions
   ("Netlify 대시보드 화면") are not briefs: leave those to real screenshots.
 
-Two ways to generate:
+Workflow for making the images:
 
-1. **In the browser**: `generate-image <chapterId> --image <n> [--prompt]`
-   runs the editor's own generator with the Google key the user saved in the
-   editor's "AI 설정". Nothing leaves the browser except the API call.
-2. **Locally**: `generate-local <chapterId> (--image <n> | --all-empty)
-   [--prompt "..."] [--style "..."] --book <dir>` builds the same prompt
-   (project style from `get_project_context.aiImagePrompt` unless
-   `--style` overrides it), calls Gemini from Node, saves the file under
-   `<book>/images/<part>-<chapter>-<n>.png`, inserts it with
-   `set_chapter_image` and records `{index, file}` in `book.json` so
-   `publish` re-applies it. Key: `GEMINI_API_KEY` or `GOOGLE_API_KEY` in
-   the environment, `--key`, or `--key-from-browser` (reuses the key the
-   user saved in the editor; the key is read from the tab and never printed).
-   Use `--dry-run` first to show the assembled prompts to the user.
-   `--all-empty` fills every empty image block of the chapter; keep it to
-   chapters whose captions are real briefs.
+1. `plan-images <chapterId> (--image <n> | --all-empty | --all) [--prompt "..."]
+   [--style "..."] --book <dir>` returns, per image block, the assembled
+   prompt (project style + caption) and a target path
+   `<book>/images/<part>-<chapter>-<n>.svg`. Show the project style prompt
+   and the briefs to the user if they have not seen them.
+2. Draw each image yourself as an SVG at that path, following the style
+   guidelines in the prompt and the rules in "Drawing diagrams as SVG" below.
+3. `set-image <chapterId> --image <n> --file <path> --book <dir>` inserts it
+   and records it in `book.json` so `publish` re-applies it.
+4. `screenshot` and Read it to check the result; fix and re-run `set-image`.
 
-3. **By the agent itself (no key needed)**: when `generate-local` finds no
-   key (or is run with `--agent`) it does not fail. It returns
-   `mode: "agent"` with, per block, the assembled prompt (project style +
-   caption) and a target path `<book>/images/<part>-<chapter>-<n>.svg`.
-   Draw each image yourself as an SVG at that path, following the prompt's
-   style guidelines and the rules in "Drawing diagrams as SVG" below, then
-   `set-image <chapterId> --image <n> --file <path> --book <dir>` inserts it
-   and records it in `book.json`. This is the default route when the user
-   has no key; tell them the figure is hand-drawn vector art, not a
-   photo-realistic render, and offer route 1 or 2 if they want that.
-
-Never ask the user to paste an API key into the chat. One AI image costs money
-and takes 10–30 s; do not loop over a whole book without an explicit go-ahead.
+Tell the user the figures are hand-drawn vector art. The editor's own
+"AI 이미지 생성" button (tool `generate_chapter_image`, `generate-image` in the
+CLI) still exists for users who keep a Google key in the editor's AI 설정;
+use it only when the user asks for it. Never ask for an API key in the chat.
 
 ### Drawing diagrams as SVG (when the user wants figures made, not just placed)
 
