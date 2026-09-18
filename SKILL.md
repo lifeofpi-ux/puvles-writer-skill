@@ -18,7 +18,9 @@ Tools by page:
 - editor (`/project/:id`): `get_project_context`, `get_book_toc`,
   `create_part`, `create_chapter`, `get_chapter_content`,
   `write_chapter_markdown`, `list_chapter_images`, `set_chapter_image`,
-  `generate_chapter_image`, `remove_chapter_image`, `navigate_to_chapter`, `update_toc_structure`,
+  `generate_chapter_image`, `remove_chapter_image`, `update_chapter`, `update_part`,
+  `insert_blocks`, `update_block`, `delete_blocks`, `replace_blocks`,
+  `navigate_to_chapter`, `update_toc_structure`,
   `save_chapter`, `delete_chapter`, `delete_part`, `update_project_settings`
 
 Run every command as `node ~/.claude/skills/puvles-writer/scripts/puvles.mjs <cmd> ...`.
@@ -103,6 +105,35 @@ If the user's message already names a mode ("바로 써줘", "로컬에 먼저 �
 Both modes end in the same state: a project with parts, chapters and bodies,
 statistics recorded, chapters marked complete when asked, editor left on the
 first chapter.
+
+## Editing an existing book (change only what the user asked for)
+
+`write-chapter` and `publish` replace a chapter's whole body. When the user
+wants a title changed, a paragraph fixed, a section rewritten or a few
+chapters redone, do not rewrite everything: use the partial tools.
+
+- **Titles and metadata**: `update-chapter <id> --title ".." [--code ..]
+  [--question ..] [--summary ..] [--complete|--incomplete] [--part <partId>]
+  [--order <n>]` and `update-part <id> --title ".." [--intro ..] [--code ..]
+  [--order <n>]`. Only the flags you pass change; the body is untouched and
+  the open editor header refreshes. `--part` moves a chapter to the end of
+  another part; `--order` reorders inside the part (or the book, for parts).
+- **A few chapters of a local book**: `publish <dir> --only 02-03,03-01`
+  (chapter code, file name or a title fragment) writes just those bodies and
+  re-applies their images; every other chapter stays as it is on the site.
+- **Inside one chapter**: `blocks <chapterId>` lists the blocks with index,
+  id, type and a preview. Then
+  `insert-blocks <id> add.md --after <blockId>` (or `--before`, `--at <n>`,
+  default append) adds new blocks, `update-block <id> <blockId> one.md`
+  (or `--text ".."` to keep the type) changes one block,
+  `replace-blocks <id> --from <h2 blockId> --to <last blockId> section.md`
+  rewrites a section in place, `delete-blocks <id> a,b,c` removes blocks.
+  The markdown files use the same dialect as chapters, without frontmatter.
+  New or changed blocks play the reveal animation and the page count updates.
+- Read the chapter first (`blocks` or `read-chapter`) and quote the block
+  ids you will touch back to the user before `replace-blocks` or
+  `delete-blocks`; both are irreversible. Never "tidy up" blocks you were
+  not asked about.
 
 ## Images (after the text is in place)
 

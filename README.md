@@ -146,3 +146,16 @@ summary: "챕터 요약 (그 아래 회색 박스)"
 - 삭제 도구는 되돌릴 수 없습니다. 에이전트가 정리 목적으로 임의로 쓰지 않도록 SKILL.md에 명시되어 있습니다.
 - 원격 디버깅 포트가 열린 Chrome은 같은 컴퓨터의 다른 프로그램도 제어할 수 있습니다. 작업이 끝나면 닫는 것을 권합니다.
 - 프로젝트 삭제, 블록 단위 편집, 이미지 업로드, 멤버 관리는 도구로 제공되지 않습니다.
+
+## 기존 책 부분 수정
+
+| 명령 | 설명 |
+|---|---|
+| `update-chapter <id> [--title ..] [--code ..] [--question ..] [--summary ..] [--complete\|--incomplete] [--part <partId>] [--order <n>]` | 챕터 제목·코드·질문·요약·완료·소속 파트·순서 수정 (본문은 그대로) |
+| `update-part <id> [--title ..] [--intro ..] [--code ..] [--order <n>]` | 파트 제목·도입글·코드·순서 수정 |
+| `publish <dir> --only 02-03,03-01` | 지정한 챕터(코드·파일명·제목 일부)만 다시 씀 |
+| `blocks <chapterId>` | 블록 목록 (번호, ID, 타입, 미리보기) |
+| `insert-blocks <chapterId> add.md [--after <id> \| --before <id> \| --at <n>]` | 지정 위치에 블록 삽입 (기본 맨 뒤) |
+| `update-block <chapterId> <blockId> (one.md \| --text "..")` | 블록 하나 수정 |
+| `replace-blocks <chapterId> --from <id> [--to <id>] section.md` | 구간(절)을 새 내용으로 교체 |
+| `delete-blocks <chapterId> <id>[,<id>..]` | 블록 삭제 (되돌릴 수 없음) |

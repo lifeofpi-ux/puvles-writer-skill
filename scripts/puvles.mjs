@@ -19,6 +19,14 @@
 //   puvles.mjs write-chapter <chapterId> <file.md> [--complete] [--no-focus]
 //   puvles.mjs read-chapter <chapterId>             get_chapter_content
 //   puvles.mjs navigate <chapterId>                 navigate_to_chapter
+//   -- editing an existing book (titles, metadata, single blocks; nothing else is rewritten)
+//   puvles.mjs update-chapter <chapterId> [--title ".."] [--code ".."] [--question ".."] [--summary ".."] [--complete|--incomplete] [--part <partId>] [--order <n>]
+//   puvles.mjs update-part <partId> [--title ".."] [--intro ".."] [--code ".."] [--order <n>] [--complete|--incomplete]
+//   puvles.mjs blocks <chapterId>                   numbered block list (id, type, preview) to pick ids for the commands below
+//   puvles.mjs insert-blocks <chapterId> <file.md> [--after <blockId> | --before <blockId> | --at <index>]   (default: append)
+//   puvles.mjs update-block <chapterId> <blockId> (<file.md> | --text "..")   one block; --text keeps the type
+//   puvles.mjs delete-blocks <chapterId> <blockId>[,<blockId>..]              irreversible
+//   puvles.mjs replace-blocks <chapterId> --from <blockId> [--to <blockId>] <file.md>   rewrite a section in place
 //   puvles.mjs save-chapter [--complete]            save_chapter (same as the editor's save button)
 //   puvles.mjs images <chapterId>                   list_chapter_images (image blocks: id, imageIndex, caption, hasImage)
 //   puvles.mjs set-image <chapterId> (--block <id> | --image <n> | --caption-match "..." | --at <index> | --after <blockId>)
@@ -346,7 +354,7 @@ const commands = {
     if (!v.ok) throw new Error('book is not valid:\n- ' + v.problems.join('\n- '));
     const { book, manifestPath } = readBook(dir);
     const plan = { project: flags.project || book.projectId || null, parts: book.parts.map(p => ({ title: p.title, code: p.code, chapters: p.chapters.map(c => `${c.code || ''} ${c.title}`.trim()) })) };
-    if (flags['dry-run']) return { dryRun: true, ...plan, wouldCreateProject: !plan.project };
+    if (flags['dry-run']) return { dryRun: true, ...plan, only: flags.only ? String(flags.only).split(',') : undefined, wouldCreateProject: !plan.project };
 
     await ensureLoggedIn();
     let projectId = plan.project;
@@ -379,7 +387,10 @@ const commands = {
         await sleep(600);
       }
       const partReport = { title: part.title, partId, chapters: [] };
+      const only = flags.only ? String(flags.only).split(',').map(x => x.trim()).filter(Boolean) : null;
+      const selected = (ch) => !only || only.some(o => o === ch.code || o === ch.file || ch.file.endsWith('/' + o) || ch.file.endsWith('/' + o + '.md') || ch.title.includes(o) || `${part.code || ''}-${ch.code || ''}` === o);
       for (const ch of part.chapters) {
+        if (!selected(ch)) { partReport.chapters.push({ code: ch.code, title: ch.title, skipped: true }); continue; }
         let chapterRow = (partRow.chapters || []).find(c => c.title === ch.title || (ch.code && c.chapter_code === ch.code));
         let chapterId = chapterRow?.id;
         if (!chapterId) {
@@ -460,6 +471,63 @@ const commands = {
     };
   },
   async 'generate-local'(args) { return commands['plan-images'](args); },
+  async 'update-chapter'([chapterId]) {
+    if (!chapterId) throw new Error('usage: update-chapter <chapterId> [--title ".."] [--code ".."] [--question ".."] [--summary ".."] [--complete|--incomplete] [--part <partId>] [--order <n>]');
+    const a = { chapterId };
+    if (flags.title !== undefined) a.title = String(flags.title);
+    if (flags.code !== undefined) a.chapterCode = String(flags.code);
+    if (flags.question !== undefined) a.question = String(flags.question);
+    if (flags.summary !== undefined) a.summary = String(flags.summary);
+    if (flags.complete) a.isCompleted = true; if (flags.incomplete) a.isCompleted = false;
+    if (flags.part) a.partId = String(flags.part);
+    if (flags.order !== undefined) a.orderIndex = Number(flags.order);
+    if (Object.keys(a).length === 1) throw new Error('nothing to update: pass at least one of --title --code --question --summary --complete --incomplete --part --order');
+    return callTool('update_chapter', a);
+  },
+  async 'update-part'([partId]) {
+    if (!partId) throw new Error('usage: update-part <partId> [--title ".."] [--intro ".."] [--code ".."] [--order <n>] [--complete|--incomplete]');
+    const a = { partId };
+    if (flags.title !== undefined) a.title = String(flags.title);
+    if (flags.intro !== undefined) a.introduction = String(flags.intro);
+    if (flags.code !== undefined) a.chapterCode = String(flags.code);
+    if (flags.complete) a.isCompleted = true; if (flags.incomplete) a.isCompleted = false;
+    if (flags.order !== undefined) a.orderIndex = Number(flags.order);
+    if (Object.keys(a).length === 1) throw new Error('nothing to update: pass at least one of --title --intro --code --order --complete --incomplete');
+    return callTool('update_part', a);
+  },
+  async blocks([chapterId]) {
+    if (!chapterId) throw new Error('usage: blocks <chapterId>');
+    const r = await callTool('get_chapter_content', { chapterId });
+    const preview = (b) => {
+      let c = b.content || '';
+      if (b.type === 'image' || b.type === 'table') { try { const o = JSON.parse(c); c = b.type === 'image' ? `${o.url ? '[img] ' : '[empty] '}${o.caption || ''}` : '[table]'; } catch { /* keep */ } }
+      return c.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 70);
+    };
+    return { chapterId, title: r.title, blocks: (r.blocks || []).map((b, i) => ({ index: i, id: b.id, type: b.type, preview: preview(b) })) };
+  },
+  async 'insert-blocks'([chapterId, file]) {
+    if (!chapterId || !file) throw new Error('usage: insert-blocks <chapterId> <file.md> [--after <blockId> | --before <blockId> | --at <index>]');
+    const { md } = prepareMarkdown(fs.readFileSync(file, 'utf8'), { joinParagraphs: !flags['split-paragraphs'] });
+    const pos = flags.after ? { afterBlockId: flags.after } : flags.before ? { beforeBlockId: flags.before } : flags.at !== undefined ? { atIndex: Number(flags.at) } : {};
+    return callTool('insert_blocks', { chapterId, markdown: md, ...pos, focus: !flags['no-focus'] });
+  },
+  async 'update-block'([chapterId, blockId, file]) {
+    if (!chapterId || !blockId || (!file && flags.text === undefined)) throw new Error('usage: update-block <chapterId> <blockId> (<file.md> | --text "..")');
+    if (file) {
+      const { md } = prepareMarkdown(fs.readFileSync(file, 'utf8'), { joinParagraphs: !flags['split-paragraphs'] });
+      return callTool('update_block', { chapterId, blockId, markdown: md, focus: !flags['no-focus'] });
+    }
+    return callTool('update_block', { chapterId, blockId, content: String(flags.text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'), focus: !flags['no-focus'] });
+  },
+  async 'delete-blocks'([chapterId, ids]) {
+    if (!chapterId || !ids) throw new Error('usage: delete-blocks <chapterId> <blockId>[,<blockId>..]');
+    return callTool('delete_blocks', { chapterId, blockIds: String(ids).split(',').map(x => x.trim()).filter(Boolean), focus: !flags['no-focus'] });
+  },
+  async 'replace-blocks'([chapterId, file]) {
+    if (!chapterId || !file || !flags.from) throw new Error('usage: replace-blocks <chapterId> --from <blockId> [--to <blockId>] <file.md>');
+    const { md } = prepareMarkdown(fs.readFileSync(file, 'utf8'), { joinParagraphs: !flags['split-paragraphs'] });
+    return callTool('replace_blocks', { chapterId, fromBlockId: flags.from, toBlockId: flags.to || undefined, markdown: md, focus: !flags['no-focus'] });
+  },
   async screenshot([out = 'puvles.png']) {
     const t = await getTarget();
     const r = await cdp(t, 'Page.captureScreenshot', { format: 'png' });
